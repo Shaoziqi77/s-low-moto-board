@@ -1,0 +1,19 @@
+# OS / Editor
+Thumbs.db
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# 本地缓存（浏览器 localStorage 里的上传数据不在本仓库内，但如生成临时文件也忽略）
+*.tmp
+*.temp
+.cache/
+node_modules/
+
+# 测试数据 / 用户上传的 Excel / CSV（请勿把个人信息相关的上传数据提交到公共仓库）
+*.xlsx
+*.xls
+*.csv
+*.zip

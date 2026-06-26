@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>S低L3-3 数据处理工具</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<style>
+  body { font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+  .upload-card { transition: all .2s ease; }
+  .upload-card.loaded { border-color:#10b981; background:#ecfdf5; }
+  .preview-table { border-collapse: collapse; font-size: 12px; }
+  .preview-table th, .preview-table td {
+    border: 1px solid #d1d5db; padding: 6px 10px; white-space: nowrap;
+  }
+  .preview-table th { background:#f3f4f6; font-weight:600; position: sticky; top:0; }
+  .preview-table tr:nth-child(even) td { background:#fafafa; }
+  .total-row td { background:#fef3c7 !important; font-weight:600; }
+  .pill { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:9999px; font-size:11px; }
+  .heat-green { background:#d1fae5; color:#065f46; }
+  .heat-yellow { background:#fef3c7; color:#92400e; }
+  .heat-red { background:#fee2e2; color:#991b1b; }
+  .chip { padding:4px 8px; background:#fff; border:1px solid #e5e7eb; border-radius:6px; font-size:12px; }
+  .modal-mask { background:rgba(15,23,42,.55); }
+  .sheet-tab.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+  .clip-toast {
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:#111827; color:#fff; padding:10px 18px; border-radius:8px; font-size:14px;
+    opacity:0; pointer-events:none; transition:all .25s; z-index:9999;
+  }
+  .clip-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .rank-bg-1 { background:#fef9c3; }
+  .rank-bg-2 { background:#e0f2fe; }
+  .rank-bg-3 { background:#fce7f3; }
+</style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+<div class="max-w-[1400px] mx-auto p-6">
+  <header class="mb-6">
+    <h1 class="text-2xl font-bold text-slate-900">S低L3-3 数据处理工具</h1>
+    <p class="text-sm text-slate-500 mt-1">上传 4 份数据表格，自动完成数据清洗、关联、衍生字段计算，生成多 Sheet 汇总数据表。</p>
+  </header>
+
+  <!-- 上传区 -->
+  <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
+    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+      <span class="w-1.5 h-5 bg-blue-600 rounded-full"></span>数据上传
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="uploadGrid">
+      <!-- 基础班级数据 -->
+      <div class="upload-card border-2 border-dashed border-slate-200 rounded-lg p-4" data-slot="class">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-blue-600 font-semibold">① 基础班级数据</span>
+              <span class="pill bg-blue-50 text-blue-700">必传</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">从「可到转介绍班级看板」按学期ID筛选查询后下载上传</p>
+            <a href="https://data.corp.hetao101.com/dc-report-fe/project/6/portal/12/dashboard/250" target="_blank" class="text-xs text-blue-500 hover:underline">跳转看板</a>
+          </div>
+          <span class="status-badge text-xs text-slate-400">未上传</span>
+        </div>
+        <label class="block cursor-pointer">
+          <input type="file" accept=".xlsx,.xls,.csv" class="hidden file-input" />
+          <div class="border border-slate-200 hover:border-blue-400 bg-slate-50 hover:bg-blue-50 rounded-md px-3 py-2 text-center text-sm text-slate-600">点击选择文件</div>
+        </label>
+        <div class="mt-2 text-xs text-slate-500 file-name"></div>
+        <div class="mt-3 hidden class-ids-box">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-slate-600">提取班级ID <span class="text-slate-400">(<span class="count">0</span>个)</span></span>
+            <button class="copy-ids-btn text-xs bg-slate-800 hover:bg-slate-900 text-white px-2.5 py-1 rounded">复制</button>
+          </div>
+          <div class="class-ids-list flex flex-wrap gap-1.5 max-h-24 overflow-auto bg-slate-50 rounded-md p-2"></div>
+        </div>
+      </div>
+
+      <!-- 基础用户数据 -->
+      <div class="upload-card border-2 border-dashed border-slate-200 rounded-lg p-4" data-slot="user">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-blue-600 font-semibold">② 基础用户数据</span>
+              <span class="pill bg-blue-50 text-blue-700">必传</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">从「可到转介绍用户看板」按班级ID筛选查询后下载上传</p>
+            <a href="https://data.corp.hetao101.com/dc-report-fe/project/6/portal/12/dashboard/253" target="_blank" class="text-xs text-blue-500 hover:underline">跳转看板</a>
+          </div>
+          <span class="status-badge text-xs text-slate-400">未上传</span>
+        </div>
+        <label class="block cursor-pointer">
+          <input type="file" accept=".xlsx,.xls,.csv" class="hidden file-input" />
+          <div class="border border-slate-200 hover:border-blue-400 bg-slate-50 hover:bg-blue-50 rounded-md px-3 py-2 text-center text-sm text-slate-600">点击选择文件</div>
+        </label>
+        <div class="mt-2 text-xs text-slate-500 file-name"></div>
+      </div>
+
+      <!-- 活动班级数据 -->
+      <div class="upload-card border-2 border-dashed border-slate-200 rounded-lg p-4" data-slot="activity-class">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-emerald-600 font-semibold">③ 活动班级数据</span>
+              <span class="pill bg-emerald-50 text-emerald-700">班级维度</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">从「MOT-S低超级马里奥活动」按学期ID选择「班级维度」查询下载上传</p>
+            <a href="https://data.corp.hetao101.com/dc-report-fe/project/6/portal/12/dashboard/4081" target="_blank" class="text-xs text-blue-500 hover:underline">跳转看板</a>
+          </div>
+          <span class="status-badge text-xs text-slate-400">未上传</span>
+        </div>
+        <label class="block cursor-pointer">
+          <input type="file" accept=".xlsx,.xls,.csv" class="hidden file-input" />
+          <div class="border border-slate-200 hover:border-emerald-400 bg-slate-50 hover:bg-emerald-50 rounded-md px-3 py-2 text-center text-sm text-slate-600">点击选择文件</div>
+        </label>
+        <div class="mt-2 text-xs text-slate-500 file-name"></div>
+      </div>
+
+      <!-- 活动用户数据 -->
+      <div class="upload-card border-2 border-dashed border-slate-200 rounded-lg p-4" data-slot="activity-user">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-emerald-600 font-semibold">④ 活动用户数据</span>
+              <span class="pill bg-emerald-50 text-emerald-700">用户明细</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">从「MOT-S低超级马里奥活动」按学期ID选择「用户明细」查询下载上传</p>
+            <a href="https://data.corp.hetao101.com/dc-report-fe/project/6/portal/12/dashboard/4081" target="_blank" class="text-xs text-blue-500 hover:underline">跳转看板</a>
+          </div>
+          <span class="status-badge text-xs text-slate-400">未上传</span>
+        </div>
+        <label class="block cursor-pointer">
+          <input type="file" accept=".xlsx,.xls,.csv" class="hidden file-input" />
+          <div class="border border-slate-200 hover:border-emerald-400 bg-slate-50 hover:bg-emerald-50 rounded-md px-3 py-2 text-center text-sm text-slate-600">点击选择文件</div>
+        </label>
+        <div class="mt-2 text-xs text-slate-500 file-name"></div>
+      </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="mt-5 flex flex-wrap items-center gap-3">
+      <button id="btnBase" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+        <span>📋</span>底表生成
+      </button>
+      <button id="btnFull" class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+        <span>✨</span>文件生成
+      </button>
+      <button id="btnClear" class="inline-flex items-center gap-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-4 py-2 rounded-md text-sm">
+        <span>🗑</span>清空全部
+      </button>
+      <span class="text-xs text-slate-500 ml-auto" id="hintText">请先上传基础班级 + 基础用户数据，即可生成底表；上传全部 4 份文件，可生成完整数据。</span>
+    </div>
+  </section>
+
+  <!-- 结果预览 -->
+  <section id="resultSection" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hidden">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <h2 class="text-lg font-semibold flex items-center gap-2">
+        <span class="w-1.5 h-5 bg-emerald-600 rounded-full"></span>数据处理结果
+      </h2>
+      <div class="flex flex-wrap gap-2">
+        <button id="btnCopyAward" class="hidden bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-sm">📸 复制获奖名单图片</button>
+        <button id="btnCopyDashboard" class="hidden bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded text-sm">📸 复制看板图片</button>
+        <button id="btnDownload" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded text-sm">📥 文件下载</button>
+      </div>
+    </div>
+
+    <div id="sheetTabs" class="flex flex-wrap gap-1.5 border-b border-slate-200 pb-3 mb-3"></div>
+    <div id="sheetContainer" class="overflow-auto border border-slate-200 rounded-md bg-white" style="max-height:700px;"></div>
+    <div id="imagePreviewArea" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+  </section>
+
+  <footer class="text-center text-xs text-slate-400 mt-8">
+    本工具所有数据处理均在本地浏览器完成，不会上传任何数据。
+  </footer>
+</div>
+
+<!-- 缓存恢复弹窗 -->
+<div id="cacheModal" class="hidden fixed inset-0 z-50 modal-mask flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+    <h3 class="text-lg font-semibold mb-2">检测到上次缓存数据</h3>
+    <p class="text-sm text-slate-600 mb-5">是否恢复上次上传的文件数据，避免重复上传？</p>
+    <div class="flex gap-2 justify-end">
+      <button id="cacheIgnoreBtn" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-md hover:bg-slate-50">重新开始</button>
+      <button id="cacheRestoreBtn" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">恢复缓存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="clip-toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
