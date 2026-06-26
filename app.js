@@ -758,6 +758,27 @@
     table.appendChild(thead);
 
     const tbody = document.createElement("tbody");
+
+    // —— 看板：按列计算「完课进入率 / 完课体验率」的动态色阶
+    //    参考图逻辑：按列数值的 min / mid / max 分三段
+    //    高 → 绿色 (#d1fae5 / #065f46)
+    //    中 → 黄色 (#fef3c7 / #92400e)
+    //    低 → 红色 (#fee2e2 / #991b1b)
+    const scales = {};
+    if (isDashboard) {
+      const dataRows = sheet.rows.filter((r) => !r.some((c) => String(c) === "总计"));
+      ["完课进入率", "完课体验率"].forEach((h) => {
+        const idx = sheet.headers.indexOf(h);
+        if (idx < 0) return;
+        const vals = dataRows.map((r) => toNum(r[idx])).filter((n) => !Number.isNaN(n));
+        if (!vals.length) return;
+        const lo = Math.min.apply(null, vals);
+        const hi = Math.max.apply(null, vals);
+        const mid = (lo + hi) / 2;
+        scales[h] = { idx, lo, mid, hi };
+      });
+    }
+
     sheet.rows.forEach((row) => {
       const tr = document.createElement("tr");
       const isTotal = row.some((c) => String(c) === "总计");
@@ -774,14 +795,23 @@
           td.style.background = "#fef3c7";
           td.style.fontWeight = "600";
         }
-        // 基于 header 名称的色阶，更稳健，不因列顺序变化而错位
-        if (isDashboard && !isTotal) {
+        if (isDashboard) {
           const hn = String(headerName || "");
-          if (hn === "完课进入率" || hn === "完课体验率") {
-            const pct = toNum(cell);
-            if (pct >= 70) { td.style.background = "#d1fae5"; td.style.color = "#065f46"; }
-            else if (pct >= 50) { td.style.background = "#fef3c7"; td.style.color = "#92400e"; }
-            else { td.style.background = "#fee2e2"; td.style.color = "#991b1b"; }
+          const scale = scales[hn];
+          if (scale && !isTotal) {
+            const v = toNum(cell);
+            // 三色：高(绿) / 中(黄) / 低(红)
+            if (v >= scale.mid) {
+              // 上半段再按与 max 的距离分绿 vs 黄；若只有两级则最大值为绿，最小值为红
+              if (scale.hi === scale.lo) { td.style.background = "#d1fae5"; td.style.color = "#065f46"; }
+              else {
+                const upperMid = (scale.mid + scale.hi) / 2;
+                if (v >= upperMid) { td.style.background = "#d1fae5"; td.style.color = "#065f46"; }
+                else { td.style.background = "#fef3c7"; td.style.color = "#92400e"; }
+              }
+            } else {
+              td.style.background = "#fee2e2"; td.style.color = "#991b1b";
+            }
             td.style.textAlign = "center";
           } else if (hn === "完课率" || hn === "完课触达率") {
             td.style.textAlign = "center";
