@@ -632,10 +632,11 @@
     if (isDashboardTab(name)) {
       const wrap = document.createElement("div");
       wrap.id = "snapshot-" + name;
-      wrap.style.display = "block";
+      wrap.style.display = "inline-block";
       wrap.style.padding = "12px 16px";
       wrap.style.background = "#ffffff";
-      wrap.style.minWidth = "100%";
+      wrap.style.width = "auto";
+      wrap.style.minWidth = "auto";
 
       const title = document.createElement("div");
       title.textContent = sheet.title || "开课日";
@@ -643,6 +644,7 @@
       title.style.color = "#374151";
       title.style.fontWeight = "600";
       title.style.padding = "2px 0";
+      title.style.whiteSpace = "nowrap";
       wrap.appendChild(title);
 
       const sub = document.createElement("div");
@@ -651,6 +653,7 @@
       sub.style.color = "#111827";
       sub.style.fontWeight = "700";
       sub.style.padding = "2px 0 10px";
+      sub.style.whiteSpace = "nowrap";
       wrap.appendChild(sub);
 
       // 开课日筛选器区域
@@ -724,7 +727,9 @@
       wrap.id = "snapshot-" + name;
       wrap.style.background = "#ffffff";
       wrap.style.padding = "12px 16px";
-      wrap.style.minWidth = "100%";
+      wrap.style.display = "inline-block";
+      wrap.style.width = "auto";
+      wrap.style.minWidth = "auto";
       wrap.appendChild(buildTable(name, sheet, false));
       container.appendChild(wrap);
       return;
@@ -1053,8 +1058,10 @@
         scale: 2,
         useCORS: true,
         logging: false,
-        windowWidth: Math.max(target.scrollWidth, 800),
-        windowHeight: target.scrollHeight + 200,
+        width: target.scrollWidth,
+        height: target.scrollHeight,
+        windowWidth: target.scrollWidth,
+        windowHeight: target.scrollHeight,
       });
       const dataUrl = canvas.toDataURL("image/png");
 
