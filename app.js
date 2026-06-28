@@ -888,7 +888,36 @@
       const nameEl = card.querySelector(".file-name");
 
       input.addEventListener("change", async (e) => {
-        const file = e.target.files[0];
+        await handleFile(e.target.files[0]);
+      });
+
+      card.addEventListener("dragenter", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        card.classList.add("drag-over");
+      });
+
+      card.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        card.classList.add("drag-over");
+      });
+
+      card.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        card.classList.remove("drag-over");
+      });
+
+      card.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        card.classList.remove("drag-over");
+        const file = e.dataTransfer.files[0];
+        await handleFile(file);
+      });
+
+      async function handleFile(file) {
         if (!file) return;
         try {
           const rows = await readFile(file);
@@ -901,7 +930,6 @@
           statusBadge.classList.add("text-emerald-600");
           nameEl.textContent = file.name + "（" + rows.length + "行）";
 
-          // 基础班级：提取班级ID
           if (slot === "class") {
             const ids = [];
             for (const r of rows) {
@@ -917,7 +945,7 @@
           console.error(err);
           toast("文件解析失败");
         }
-      });
+      }
     });
 
     document.querySelector(".copy-ids-btn")?.addEventListener("click", () => {
