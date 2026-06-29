@@ -1324,7 +1324,373 @@
 
     bindCacheModal();
     updateButtons();
+    initRecoveryModule();
   }
 
   document.addEventListener("DOMContentLoaded", init);
+
+  /* ================================================================
+     数据回收模块
+  ================================================================ */
+  const RECOVERY_CACHE_KEY = "s_low_l3_recovery_cache_v1";
+
+  const recoveryState = {
+    raw: null,
+    fileName: "",
+    workbook: null,
+    sheets: {},
+  };
+
+  // Tab 切换
+  function switchMainTab(tab) {
+    const dailySection = document.getElementById("dailySection");
+    const recoverySection = document.getElementById("recoverySection");
+    const tabDaily = document.getElementById("tabDaily");
+    const tabRecovery = document.getElementById("tabRecovery");
+
+    if (tab === "daily") {
+      dailySection.classList.remove("hidden");
+      recoverySection.classList.add("hidden");
+      tabDaily.classList.add("border-blue-600", "text-blue-600", "bg-blue-50");
+      tabDaily.classList.remove("border-transparent", "text-slate-500");
+      tabRecovery.classList.remove("border-purple-600", "text-purple-600", "bg-purple-50");
+      tabRecovery.classList.add("border-transparent", "text-slate-500");
+    } else {
+      dailySection.classList.add("hidden");
+      recoverySection.classList.remove("hidden");
+      tabRecovery.classList.add("border-purple-600", "text-purple-600", "bg-purple-50");
+      tabRecovery.classList.remove("border-transparent", "text-slate-500");
+      tabDaily.classList.remove("border-blue-600", "text-blue-600", "bg-blue-50");
+      tabDaily.classList.add("border-transparent", "text-slate-500");
+    }
+  }
+
+  // 缓存
+  function saveRecoveryCache() {
+    try {
+      const cache = {
+        fileName: recoveryState.fileName,
+        raw: recoveryState.raw,
+        t: Date.now(),
+      };
+      localStorage.setItem(RECOVERY_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) {
+      console.warn("数据回收缓存写入失败", e);
+    }
+  }
+
+  function loadRecoveryCache() {
+    try {
+      const s = localStorage.getItem(RECOVERY_CACHE_KEY);
+      if (!s) return null;
+      return JSON.parse(s);
+    } catch { return null; }
+  }
+
+  function clearRecoveryCache() {
+    localStorage.removeItem(RECOVERY_CACHE_KEY);
+  }
+
+  // 绑定上传卡片
+  function bindRecoveryUploadCard() {
+    const card = document.querySelector("#recoveryUploadGrid .upload-card");
+    if (!card) return;
+
+    const input = card.querySelector(".file-input");
+    const statusBadge = card.querySelector(".status-badge");
+    const nameEl = card.querySelector(".file-name");
+
+    input.addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      await handleRecoveryFile(file);
+    });
+
+    card.addEventListener("dragenter", (e) => { e.preventDefault(); card.classList.add("drag-over"); });
+    card.addEventListener("dragover", (e) => { e.preventDefault(); card.classList.add("drag-over"); });
+    card.addEventListener("dragleave", (e) => { e.preventDefault(); card.classList.remove("drag-over"); });
+    card.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      card.classList.remove("drag-over");
+      const file = e.dataTransfer.files[0];
+      if (file) await handleRecoveryFile(file);
+    });
+
+    async function handleRecoveryFile(file) {
+      try {
+        const rows = await readFile(file);
+        if (!rows.length) { toast("文件为空"); return; }
+        recoveryState.raw = rows;
+        recoveryState.fileName = file.name;
+        card.classList.add("loaded");
+        statusBadge.textContent = "已上传";
+        statusBadge.classList.remove("text-slate-400");
+        statusBadge.classList.add("text-emerald-600");
+        nameEl.textContent = file.name + "（" + rows.length + "行）";
+        saveRecoveryCache();
+        document.getElementById("btnRecoveryProcess").disabled = false;
+        toast("上传成功");
+      } catch (err) {
+        console.error(err);
+        toast("文件解析失败");
+      }
+    }
+  }
+
+  // 数据处理：构建数据回收 Sheet
+  function buildRecoverySheet(rawData) {
+    // 数据回收字段列表（按顺序）
+    const recoveryFields = [
+      "期次", "时间", "目标用户", "完课用户", "完课率", "触达用户", "完课触达率", "触达率",
+      "访问uv", "完课CTR", "体验作品uv", "完课-体验率", "在班体验率", "访问-体验漏斗",
+      "分享活动页uv", "体验页-分享活动页漏斗", "分享作品uv", "体验-分享率", "访问-分享率",
+      "在班用户分享率", "作品曝光UV", "分享人均", "带新曝光", "体验用户人均曝光",
+      "作品新用户曝光UV", "新用户CVR", "带新leads", "分享用户带R", "k值", "成本",
+      "L1cac", "年课", "续报率", "年课cac", "roi"
+    ];
+
+    // 字段映射：数据回收字段 -> 底表字段
+    const fieldMapping = {
+      "目标用户": "在班人数",
+      "完课用户": "完课人数",
+      "触达用户": "触达人数",
+      "访问uv": "进入活动人数",
+      "体验作品uv": "体验作品人数",
+      "分享作品uv": "分享作品人数",
+      "作品曝光UV": "好友体验UV",
+      "作品新用户曝光UV": "新用户好友查看UV",
+      "带新leads": "L1订单数",
+    };
+
+    const rows = [];
+    for (const r of rawData) {
+      const newRow = [];
+      for (const field of recoveryFields) {
+        if (fieldMapping[field]) {
+          const srcField = fieldMapping[field];
+          const val = pickField(r, [srcField]);
+          newRow.push(val !== undefined ? val : "");
+        } else {
+          newRow.push("");
+        }
+      }
+      rows.push(newRow);
+    }
+
+    return { headers: recoveryFields.slice(), rows };
+  }
+
+  // 处理数据
+  function processRecoveryData() {
+    if (!recoveryState.raw) {
+      toast("请先上传数据文件");
+      return;
+    }
+
+    try {
+      // 底表：保留原始数据
+      const rawHeaders = recoveryState.raw.length > 0 ? Object.keys(recoveryState.raw[0]) : [];
+      const baseRows = recoveryState.raw.map((r) => rawHeaders.map((h) => r[h] !== undefined ? r[h] : ""));
+
+      // 数据回收 Sheet
+      const recoverySheet = buildRecoverySheet(recoveryState.raw);
+
+      recoveryState.sheets = {
+        "底表": { headers: rawHeaders, rows: baseRows },
+        "数据回收": recoverySheet,
+      };
+
+      // 渲染预览（默认显示数据回收）
+      renderRecoveryPreview();
+
+      document.getElementById("recoveryResultSection").classList.remove("hidden");
+      document.getElementById("btnRecoveryCopy").disabled = false;
+      document.getElementById("btnRecoveryDownload").disabled = false;
+
+      toast("数据处理成功");
+    } catch (err) {
+      console.error(err);
+      toast("数据处理失败：" + (err.message || err));
+    }
+  }
+
+  // 渲染数据回收预览（横向展示：字段作为列标题）
+  function renderRecoveryPreview() {
+    const container = document.getElementById("recoverySheetContainer");
+    container.innerHTML = "";
+
+    const sheet = recoveryState.sheets["数据回收"];
+    if (!sheet || !sheet.rows.length) return;
+
+    const wrap = document.createElement("div");
+    wrap.style.display = "inline-block";
+    wrap.style.padding = "12px 16px";
+    wrap.style.background = "#ffffff";
+    wrap.style.minWidth = "auto";
+
+    const title = document.createElement("div");
+    title.textContent = "数据回收";
+    title.style.fontSize = "16px";
+    title.style.fontWeight = "700";
+    title.style.color = "#111827";
+    title.style.marginBottom = "12px";
+    title.style.whiteSpace = "nowrap";
+    wrap.appendChild(title);
+
+    const table = document.createElement("table");
+    table.className = "preview-table";
+    table.style.borderCollapse = "collapse";
+
+    const thead = document.createElement("thead");
+    const headerTr = document.createElement("tr");
+    
+    sheet.headers.forEach((header) => {
+      const th = document.createElement("th");
+      th.textContent = header;
+      th.style.background = "#f3f4f6";
+      th.style.fontWeight = "600";
+      th.style.border = "1px solid #d1d5db";
+      th.style.padding = "8px 12px";
+      th.style.whiteSpace = "nowrap";
+      th.style.textAlign = "center";
+      th.style.minWidth = "100px";
+      headerTr.appendChild(th);
+    });
+    thead.appendChild(headerTr);
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    sheet.rows.forEach((row) => {
+      const tr = document.createElement("tr");
+      row.forEach((value) => {
+        const td = document.createElement("td");
+        td.textContent = value !== undefined && value !== null ? value : "";
+        td.style.border = "1px solid #d1d5db";
+        td.style.padding = "8px 12px";
+        td.style.whiteSpace = "nowrap";
+        td.style.textAlign = "center";
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    wrap.appendChild(table);
+    container.appendChild(wrap);
+  }
+
+  // 复制数据（不含表头，横向 Tab 分隔）
+  function copyRecoveryData() {
+    const sheet = recoveryState.sheets["数据回收"];
+    if (!sheet || !sheet.rows.length) {
+      toast("暂无数据可复制");
+      return;
+    }
+
+    const parts = [];
+    sheet.headers.forEach((header, idx) => {
+      const value = sheet.rows[0][idx];
+      parts.push(value !== undefined && value !== null ? String(value) : "");
+    });
+
+    const text = parts.join("\t");
+
+    copyText(text).then(() => {
+      toast("已复制到剪贴板");
+    }).catch((err) => {
+      toast("复制失败：" + (err.message || err));
+    });
+  }
+
+  // 下载文件
+  function downloadRecoveryFile() {
+    if (!Object.keys(recoveryState.sheets).length) {
+      toast("请先生成数据");
+      return;
+    }
+
+    try {
+      const wb = XLSX.utils.book_new();
+      for (const name of Object.keys(recoveryState.sheets)) {
+        const sheet = recoveryState.sheets[name];
+        const aoa = [sheet.headers.slice()].concat(sheet.rows.map((r) => r.slice()));
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        const cols = sheet.headers.map((h, i) => {
+          const maxLen = Math.max(
+            String(h).length,
+            ...sheet.rows.slice(0, 500).map((r) => String(r[i] ?? "").length)
+          );
+          return { wch: Math.min(40, Math.max(10, maxLen + 2)) };
+        });
+        ws["!cols"] = cols;
+        XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+      }
+
+      const baseName = recoveryState.fileName.replace(/\.[^.]+$/, "") || "数据回收";
+      const fileName = baseName + ".xlsx";
+      XLSX.writeFile(wb, fileName);
+      toast("文件已下载：" + fileName);
+    } catch (err) {
+      console.error(err);
+      toast("下载失败：" + (err.message || err));
+    }
+  }
+
+  // 初始化数据回收模块
+  function initRecoveryModule() {
+    bindRecoveryUploadCard();
+
+    document.getElementById("btnRecoveryProcess").addEventListener("click", processRecoveryData);
+    document.getElementById("btnRecoveryCopy").addEventListener("click", copyRecoveryData);
+    document.getElementById("btnRecoveryDownload").addEventListener("click", downloadRecoveryFile);
+    document.getElementById("btnRecoveryClear").addEventListener("click", () => {
+      if (!confirm("确认清空数据回收缓存？")) return;
+      recoveryState.raw = null;
+      recoveryState.fileName = "";
+      recoveryState.sheets = {};
+      recoveryState.workbook = null;
+      clearRecoveryCache();
+
+      const card = document.querySelector("#recoveryUploadGrid .upload-card");
+      if (card) {
+        card.classList.remove("loaded");
+        card.querySelector(".status-badge").textContent = "未上传";
+        card.querySelector(".status-badge").classList.add("text-slate-400");
+        card.querySelector(".status-badge").classList.remove("text-emerald-600");
+        card.querySelector(".file-name").textContent = "";
+      }
+      document.querySelectorAll("#recoveryUploadGrid .file-input").forEach((i) => (i.value = ""));
+      document.getElementById("recoveryResultSection").classList.add("hidden");
+      document.getElementById("btnRecoveryProcess").disabled = true;
+      document.getElementById("btnRecoveryCopy").disabled = true;
+      document.getElementById("btnRecoveryDownload").disabled = true;
+      toast("已清空");
+    });
+
+    // 检查缓存
+    const cache = loadRecoveryCache();
+    if (cache && cache.raw && cache.raw.length) {
+      if (confirm("检测到数据回收模块有缓存数据，是否恢复？")) {
+        recoveryState.raw = cache.raw;
+        recoveryState.fileName = cache.fileName || "";
+
+        const card = document.querySelector("#recoveryUploadGrid .upload-card");
+        if (card) {
+          card.classList.add("loaded");
+          const sb = card.querySelector(".status-badge");
+          sb.textContent = "已上传";
+          sb.classList.remove("text-slate-400");
+          sb.classList.add("text-emerald-600");
+          const nm = card.querySelector(".file-name");
+          nm.textContent = (recoveryState.fileName || "已恢复文件") + "（" + recoveryState.raw.length + "行）";
+        }
+        document.getElementById("btnRecoveryProcess").disabled = false;
+        toast("已恢复上次缓存");
+      }
+    }
+  }
+
+  // 将 switchMainTab 暴露到全局
+  window.switchMainTab = switchMainTab;
+
 })();

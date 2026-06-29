@@ -42,9 +42,21 @@
 <div class="max-w-[1400px] mx-auto p-6">
   <header class="mb-6">
     <h1 class="text-2xl font-bold text-slate-900">S低L3-3 数据处理工具</h1>
-    <p class="text-sm text-slate-500 mt-1">上传 4 份数据表格，自动完成数据清洗、关联、衍生字段计算，生成多 Sheet 数据表。</p>
+    <p class="text-sm text-slate-500 mt-1">上传数据表格，自动完成数据清洗、关联、衍生字段计算，生成多 Sheet 数据表。</p>
   </header>
 
+  <!-- Tab 切换 -->
+  <div class="flex gap-1 mb-6 border-b border-slate-200">
+    <button id="tabDaily" class="tab-btn px-5 py-2.5 text-sm font-medium border-b-2 border-blue-600 text-blue-600 bg-blue-50 rounded-t-lg" onclick="switchMainTab('daily')">
+      📋 日常播报
+    </button>
+    <button id="tabRecovery" class="tab-btn px-5 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-t-lg" onclick="switchMainTab('recovery')">
+      🔄 数据回收
+    </button>
+  </div>
+
+  <!-- ========== 日常播报模块 ========== -->
+  <section id="dailySection">
   <!-- 上传区 -->
   <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
     <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -175,6 +187,64 @@
   <footer class="text-center text-xs text-slate-400 mt-8">
     本工具所有数据处理均在本地浏览器完成，不会上传任何数据。
   </footer>
+  </section>
+
+  <!-- ========== 数据回收模块 ========== -->
+  <section id="recoverySection" class="hidden">
+    <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
+      <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+        <span class="w-1.5 h-5 bg-purple-600 rounded-full"></span>数据上传
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="recoveryUploadGrid">
+        <!-- 活动期次数据 -->
+        <div class="upload-card border-2 border-dashed border-slate-200 rounded-lg p-4" data-slot="recovery">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-purple-600 font-semibold">活动期次数据</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">从「MOT-S低超级马里奥活动」按「学期ID」选择「期次」查询下载上传</p>
+              <a href="https://data.corp.hetao101.com/dc-report-fe/project/6/portal/12/dashboard/4081" target="_blank" class="text-xs text-blue-500 hover:underline">跳转看板</a>
+            </div>
+            <span class="status-badge text-xs text-slate-400">未上传</span>
+          </div>
+          <label class="block cursor-pointer">
+            <input type="file" accept=".xlsx,.xls,.csv" class="hidden file-input" />
+            <div class="border border-slate-200 hover:border-purple-400 bg-slate-50 hover:bg-purple-50 rounded-md px-3 py-2 text-center text-sm text-slate-600">点击选择文件</div>
+          </label>
+          <div class="mt-2 text-xs text-slate-500 file-name"></div>
+        </div>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="mt-5 flex flex-wrap items-center gap-3">
+        <button id="btnRecoveryProcess" class="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+          <span>⚙️</span>文件处理
+        </button>
+        <button id="btnRecoveryCopy" class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+          <span>📋</span>复制数据
+        </button>
+        <button id="btnRecoveryDownload" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+          <span>📥</span>文件下载
+        </button>
+        <button id="btnRecoveryClear" class="inline-flex items-center gap-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-4 py-2 rounded-md text-sm">
+          <span>🗑</span>清空缓存
+        </button>
+      </div>
+    </section>
+
+    <!-- 结果预览 -->
+    <section id="recoveryResultSection" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 hidden">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h2 class="text-lg font-semibold flex items-center gap-2">
+          <span class="w-1.5 h-5 bg-purple-600 rounded-full"></span>数据处理结果
+        </h2>
+      </div>
+
+      <div id="recoverySheetContainer" class="overflow-auto border border-slate-200 rounded-md bg-white" style="max-height:700px;"></div>
+    </section>
+  </section>
+
 </div>
 
 <!-- 缓存恢复弹窗 -->
@@ -192,6 +262,6 @@
 <!-- Toast -->
 <div id="toast" class="clip-toast"></div>
 
-<script src="app.js?v=20260626"></script>
+<script src="app.js?v=20260629"></script>
 </body>
 </html>
